@@ -1,0 +1,5 @@
+config.py
+__pycache__
+oura_data.csv
+log_oura.txt
+.vscode
