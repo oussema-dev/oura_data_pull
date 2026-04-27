@@ -26,14 +26,14 @@ from dateutil.parser import isoparse
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from apscheduler.schedulers.blocking import BlockingScheduler
-from config import RIDER_LIST, DEFAULT_START_DATE, CSV_FILE_FULL, LOG_FILE, DEFAULT_TZ_OFFSET, EMAIL_SERVER, EMAIL_PORT, EMAIL_SENDER, EMAIL_PASSWORD, CC_EMAIL
+from config import RIDER_LIST, DEFAULT_START_DATE, CSV_FILE_FULL, OURA_LOG_FILE, EMAIL_SERVER, EMAIL_PORT, EMAIL_SENDER, EMAIL_PASSWORD, CC_EMAIL
 
 # Setup Logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
     handlers=[
-        logging.FileHandler(LOG_FILE),
+        logging.FileHandler(OURA_LOG_FILE),
         logging.StreamHandler()
     ]
 )
@@ -41,9 +41,6 @@ logging.basicConfig(
 # Global API Request Counter and Lock
 api_calls_count = 0
 api_counter_lock = threading.Lock()
-
-# Global Timezone Cache to hold the last known timezone per rider
-tz_cache = {}
 
 # API REQUEST COUNTER FUNCTIONALITY
 def log_api_requests_per_minute():
@@ -134,31 +131,6 @@ def make_api_call(url, token, params):
             
     return {"data": []}
 
-def get_tz_offset(token, rider_name, target_date):
-    """Retrieves timezone offset by looking at sleep data up to 7 days back."""
-    # Check cache first (set during sleep processing)
-    if rider_name in tz_cache:
-        return tz_cache[rider_name]
-    
-    # Look back up to 7 days
-    url = 'https://api.ouraring.com/v2/usercollection/sleep'
-    for i in range(7):
-        query_date = target_date - timedelta(days=i)
-        params = {"start_date": str(query_date), "end_date": str(query_date + timedelta(days=1))}
-        data = make_api_call(url, token, params)
-        for item in data.get("data", []):
-            if item.get("type") == "long_sleep" and item.get("bedtime_start"):
-                dt = isoparse(item["bedtime_start"])
-                # Extract TZ string like "+01:00" or "-05:00" or "Z"
-                tz_str = dt.strftime('%z')
-                if tz_str:
-                    tz_formatted = tz_str[:3] + ':' + tz_str[3:]
-                    tz_cache[rider_name] = tz_formatted
-                    return tz_formatted
-    
-    # If not found at all
-    return DEFAULT_TZ_OFFSET
-
 # Route Specific Data Processors
 def fetch_activity(token, start_str, end_str):
     """Fetch daily activity data for the requested date."""
@@ -234,15 +206,6 @@ def fetch_sleep(token, start_str, end_str, rider_name):
             # Extract basic cols
             for c in cols:
                 out[f"sleep_{c}"] = item.get(c)
-                
-            # Cache timezone
-            bt_start = item.get("bedtime_start")
-            if bt_start:
-                dt = isoparse(bt_start)
-                tz_str = dt.strftime('%z')
-                if tz_str:
-                    tz_formatted = tz_str[:3] + ':' + tz_str[3:]
-                    tz_cache[rider_name] = tz_formatted
             
             # Process Heart Rate
             hr_data = item.get("heart_rate")
@@ -278,68 +241,6 @@ def fetch_sleep(token, start_str, end_str, rider_name):
 
     return out
 
-def fetch_heartrate(token, start_date_obj, rider_name):
-    """Parse heartrate data."""
-    url = 'https://api.ouraring.com/v2/usercollection/heartrate'
-    
-    # Determine timezone offset
-    tz_offset = get_tz_offset(token, rider_name, start_date_obj)
-    
-    # Target window: 7 PM of start_date to 11 AM of start_date + 1 (which is end_date)
-    start_dt_str = f"{start_date_obj}T19:00:00{tz_offset}"
-    end_dt_str = f"{(start_date_obj + timedelta(days=1))}T11:00:00{tz_offset}"
-    
-    params = {"start_datetime": start_dt_str, "end_datetime": end_dt_str}
-    res = make_api_call(url, token, params)
-    
-    out = {
-        "heartrate_min": None, "heartrate_max": None, "heartrate_avg": None,
-        "heartrate_min_bpm_timestamp": None,
-        "heartrate_bpm_values": None, "heartrate_bpm_timestamps": None
-    }
-    
-    # Parse Offset into timedelta to adjust UTC API responses
-    sign = -1 if tz_offset[0] == '-' else 1
-    hrs, mins = map(int, tz_offset[1:].split(':'))
-    offset_td = timedelta(hours=sign * hrs, minutes=sign * mins)
-    
-    valid_bpms = []
-    
-    for item in res.get("data", []):
-        bpm = item.get("bpm")
-        ts_utc_str = item.get("timestamp")
-        
-        if bpm is not None and 30 <= bpm <= 240 and ts_utc_str:
-            # Check if within window (Oura API sometimes returns padding)
-            dt_utc = isoparse(ts_utc_str)
-            dt_local = dt_utc + offset_td
-            
-            # Reconstruct bound objects for comparison
-            bound_start = isoparse(start_dt_str)
-            bound_end = isoparse(end_dt_str)
-            
-            # Remove tzinfo for naive comparison (we already adjusted the raw time)
-            dt_local_naive = dt_local.replace(tzinfo=None)
-            bound_start_naive = bound_start.replace(tzinfo=None)
-            bound_end_naive = bound_end.replace(tzinfo=None)
-            
-            if bound_start_naive <= dt_local_naive <= bound_end_naive:
-                valid_bpms.append((bpm, dt_local_naive.strftime('%H:%M:%S')))
-                
-    if valid_bpms:
-        bpm_vals = [str(v[0]) for v in valid_bpms]
-        ts_vals = [v[1] for v in valid_bpms]
-        
-        min_tuple = min(valid_bpms, key=lambda x: x[0])
-        
-        out["heartrate_min"] = min_tuple[0]
-        out["heartrate_max"] = max(int(b) for b in bpm_vals)
-        out["heartrate_avg"] = sum(int(b) for b in bpm_vals) / len(bpm_vals)
-        out["heartrate_min_bpm_timestamp"] = min_tuple[1]
-        out["heartrate_bpm_values"] = ",".join(bpm_vals)
-        out["heartrate_bpm_timestamps"] = ",".join(ts_vals)
-        
-    return out
 
 # MAIN DATA PIPELINE
 def run_sync():
@@ -387,14 +288,12 @@ def run_sync():
             spo2_data = fetch_spo2(token, str_date, str_next_date)
             stress_data = fetch_stress(token, str_date, str_next_date)
             sleep_data = fetch_sleep(token, str_date, str_next_date, rider_name)
-            hr_data = fetch_heartrate(token, current_date, rider_name)
             
             row.update(act_data)
             row.update(read_data)
             row.update(spo2_data)
             row.update(stress_data)
             row.update(sleep_data)
-            row.update(hr_data)
             
             all_new_rows.append(row)
             new_rows_count += 1

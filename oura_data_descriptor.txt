@@ -1,0 +1,27 @@
+daily_activity_non_wear_time	                                            Integer	Unit: seconds	Number of seconds during the day when the user was not wearing the ring. Can be used as a proxy for data accuracy, i.e. how well the measured physical activity represents actual total activity of the ring user.
+daily_activity_high_activity_time	                                        Integer	Unit: seconds	Number of seconds during the day with high intensity activity (e.g. running). The lower MET level limit for high intensity activity depends on user's age and gender.
+daily_readiness_temperature_deviation	                                    Float	Unit: Celsius	Skin temperature deviation from the long-term temperature average.
+daily_readiness_temperature_trend_deviation	                                Float	Unit: Celsius	Skin temperature deviation from weighted three day rolling temperature average.
+daily_spo2_spo2_percentage	                                                Integer or Null	Unit: Percentage	Average blood oxygen percentage from the longest sleep period of each day.   
+daily_stress_stress_high	                                                Integer or Null     Time spent in a high stress zone (top quartile of data)
+daily_stress_recovery_high	                                                Integer or Null     Time spend in a high recovery zone (bottom quartile data)
+sleep_average_breath	                                                    Float	Unit: breaths per minute	Average respiratory rate.
+sleep_average_heart_rate	                                                Float	Unit: beats per minute	The average heart rate registered during the sleep period.
+sleep_average_hrv	                                                        Integer	Unit: milliseconds	The average HRV calculated with RMSSD method.
+sleep_awake_time	                                                        Integer	Unit: seconds	Total amount of awake time registered during the sleep period.
+sleep_bedtime_start	                                                        String	Format: Datetime	Local time when the sleep period started based on connected mobile device clock.
+sleep_bedtime_end	                                                        String	Format: Datetime	Local time when the sleep period ended based on connected mobile device clock.
+sleep_deep_sleep_duration	                                                Integer	Unit: seconds	Total amount of deep (N3) sleep registered during the sleep period.
+sleep_efficiency	                                                        Integer	Range: 1-100	Sleep efficiency is the percentage of the sleep period spent asleep (100% * sleep.total / sleep.duration).
+sleep_latency	                                                            Integer	Unit: seconds	Detected latency from bedtime_start to the beginning of the first five minutes of persistent sleep.
+sleep_lowest_heart_rate	                                                    Integer	Unit: beats per minute	The lowest heart rate (5 minutes sliding average) registered during the sleep period.
+sleep_restless_periods	                                                    Integer	Unit: seconds	Amount of sleep time measured in seconds when significant movement was recorded during the sleep period.
+sleep_time_in_bed	                                                        Integer	Unit: seconds	Total duration of the sleep period, measured in seconds (time_in_bed = total_sleep_duration + awake_time).
+sleep_total_sleep_duration	                                                Integer	Unit: seconds	Total amount of sleep measured in seconds, registered during the sleep period (total_sleep_duration = rem_sleep_duration + light_sleep_duration + deep_sleep_duration).
+sleep_hr_min	                                                    		Float	Unit: beats per minute	The minimum heart rate calculated during the sleep period. (calculated ourselves)
+sleep_hr_max	                                                    		Float	Unit: beats per minute	The maximum heart rate calculated during the sleep period. (calculated ourselves)
+sleep_hr_avg	                                                    		Float	Unit: beats per minute	The average heart rate calculated during the sleep period. (calculated ourselves)
+sleep_min_sleep_hr_timestamp												String	Format: Datetime 	Timestamp of the minimum heart rate value during sleep (caluculated using the index of the minimum sleep heart rate value * interval of the hr measurements + sleep_bedtime_start) 
+sleep_hrv_min	                                                            Integer	Unit: milliseconds	The minimum HRV calculated with RMSSD method. (calculated ourselves)
+sleep_hrv_max                                                               Integer	Unit: milliseconds	The maximum HRV calculated with RMSSD method. (calculated ourselves)
+sleep_hrv_avg	                                                            Integer	Unit: milliseconds	The average HRV calculated with RMSSD method. (calculated ourselves)
